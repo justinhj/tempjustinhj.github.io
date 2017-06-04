@@ -1,0 +1,397 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Code is Fun</title>
+    <description>Tips, tricks and whatever I find interesting. Covers emacs, functional and reative programming, python, scala, akka, databases, and distributed systems</description>
+    <link>http://localhost:4000/</link>
+    <atom:link href="http://localhost:4000/feed.xml" rel="self" type="application/rss+xml"/>
+    <pubDate>Sun, 04 Jun 2017 08:36:29 -0700</pubDate>
+    <lastBuildDate>Sun, 04 Jun 2017 08:36:29 -0700</lastBuildDate>
+    <generator>Jekyll v3.4.3</generator>
+    
+      <item>
+        <title>Future[Either] and monad transformers</title>
+        <description>&lt;h2 id=&quot;future-and-either-together&quot;&gt;Future and Either together&lt;/h2&gt;
+
+&lt;p&gt;When handling errors in Scala the Either type is very useful since it allows us to define the type of our right result (the success) as well as the type of the left (failure) result.&lt;/p&gt;
+
+&lt;p&gt;Just a warning, I use Either and \/ (ScalaZ disjunction) interchangably in this post.&lt;/p&gt;
+
+&lt;p&gt;Often our functions are also expected to run concurrently using a Future. When we want to combine both capabilities together we end up with type signature like this one:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;n&quot;&gt;A&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Either&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;FailureType&lt;/span&gt;, &lt;span class=&quot;kt&quot;&gt;SuccessType&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;Both Either and Future are monads, which means that we can chain them together using a sequence of flatmap and map operations.&lt;/p&gt;
+
+&lt;p&gt;Let’s consider two rather contrived functions just for exploring how Future and Either work together.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;  &lt;span class=&quot;c1&quot;&gt;// halves the input if it is even else fails
+&lt;/span&gt;  &lt;span class=&quot;c1&quot;&gt;// to investigate exception handling we will throw an ArithmeticException if n is zero
+&lt;/span&gt;  &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dummyFunction1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;n&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Int&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;implicit&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ec&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;ExecutionContext&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;\/&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;, &lt;span class=&quot;kt&quot;&gt;Int&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]]&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+
+    &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;n&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;nc&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;failed&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;ArithmeticException&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;n must not be zero&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;))&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;else&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;nc&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;successful&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;n&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;==&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+          &lt;span class=&quot;o&quot;&gt;\/-(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;n&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;/&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;k&quot;&gt;else&lt;/span&gt;
+          &lt;span class=&quot;o&quot;&gt;-\/(&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;An odd number&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+      &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+  &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+
+  &lt;span class=&quot;c1&quot;&gt;// appends a suffix to the input after converting to a string
+&lt;/span&gt;  &lt;span class=&quot;c1&quot;&gt;// it doesn't like numbers divisible by 3 and 7 though
+&lt;/span&gt;  &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dummyFunction2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;n&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Int&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;implicit&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ec&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;ExecutionContext&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;\/&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;, &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]]&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+    &lt;span class=&quot;nc&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;successful&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;if&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;n&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;3&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;&amp;amp;&amp;amp;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;n&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;7&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;!=&lt;/span&gt; &lt;span class=&quot;mi&quot;&gt;0&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+        &lt;span class=&quot;o&quot;&gt;\/-(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;n&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;toString&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot; horay!&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;else&lt;/span&gt;
+        &lt;span class=&quot;o&quot;&gt;-\/(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;s&lt;/span&gt;&lt;span class=&quot;s&quot;&gt;&quot;I don't like the number $n&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+  &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;As you can see it’s a bit messy to work with Future[Either] because at each step of the computation we need to reach into the Future with map, check the Either and then pass it on to the next step.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;  &lt;span class=&quot;n&quot;&gt;dummyFunction1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;14&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;flatMap&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;\/-(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;rb1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;n&quot;&gt;dummyFunction1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;12&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;flatMap&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+          &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;\/-(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;rb2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&amp;gt;&lt;/span&gt;
+            &lt;span class=&quot;n&quot;&gt;dummyFunction2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;rb2&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rb1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;).&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;map&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+              &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;\/-(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;rb3&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rb3&lt;/span&gt; &lt;span class=&quot;c1&quot;&gt;// Finally we got the result
+&lt;/span&gt;            &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+        &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;Usually when we see this staircase pattern you can utilize a for comprehension to simplify things.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt; &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;r&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb1&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dummyFunction1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;8&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;);&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb2&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;dummyFunction1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;12&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;yield&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;rb1&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rb2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+
+    &lt;span class=&quot;n&quot;&gt;r&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;map&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;_&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;shouldBe&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;\/-(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;11&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;Except we can’t do that because rb1 and rb2 are getting the result of the future but not inside the disjunction. And since you can’t have different effect types in a for comprehension (it has to play nicely with flatmap) we are stuck. We could extract the values from the futures in one for comprehension, then in a second one we could extract from the Eithers, but that has the problem that all of the futures have to run before our second for comprehension, and that means we could waste time completing one of the later futures when an earlier result is Left (failure) case.&lt;/p&gt;
+
+&lt;h2 id=&quot;monad-transformers&quot;&gt;Monad Transformers&lt;/h2&gt;
+
+&lt;p&gt;Introducting EitherT. EitherT is a monad transformer, and appears in various libraries such as ScalaZ, Cats and Hamsters. For the Cats version of EitherT checkout this interesting blog post &lt;a href=&quot;http://eed3si9n.com/herding-cats/stacking-future-and-either.html&quot;&gt;eed3si9n&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;For ScalaZ and Hamsters keep reading!&lt;/p&gt;
+
+&lt;h2 id=&quot;scalaz-7&quot;&gt;ScalaZ (7)&lt;/h2&gt;
+
+&lt;p&gt;Using ScalaZ transformers we can write our code very similarly to the code above simply by wrapping each step in an eitherT constructor…&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt; &lt;span class=&quot;k&quot;&gt;import&lt;/span&gt; &lt;span class=&quot;nn&quot;&gt;scalaz.EitherT.eitherT&lt;/span&gt;
+
+ &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;r&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb1&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;eitherT&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dummyFunction1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;14&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;));&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb2&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;eitherT&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dummyFunction1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;12&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;));&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb3&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;eitherT&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dummyFunction2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;rb2&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rb1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;))&lt;/span&gt;
+
+    &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;yield&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rb3&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;That’s very straightforward, and now you can see that we are able to reach into the Future result and the Either result at the same time. Behind the scenes we’re constructing the transformer which when flatmapped knows how to do the steps that we would have done manually.&lt;/p&gt;
+
+&lt;p&gt;The only complication here is that now our result type at the end is not Future[\/[String, String]] like we’d expect but in fact is EitherT[Future, String, String]&lt;/p&gt;
+
+&lt;p&gt;In order to get back to where we were ScalaZ provids a run function. So the full example looks like this:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt; &lt;span class=&quot;k&quot;&gt;import&lt;/span&gt; &lt;span class=&quot;nn&quot;&gt;scalaz.EitherT.eitherT&lt;/span&gt;
+
+ &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;r&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb1&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;eitherT&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dummyFunction1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;14&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;));&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb2&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;eitherT&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dummyFunction1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;12&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;));&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb3&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;eitherT&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dummyFunction2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;rb2&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rb1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;))&lt;/span&gt;
+
+    &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;yield&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rb3&lt;/span&gt;
+
+  &lt;span class=&quot;n&quot;&gt;r&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;run&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;//&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;\/&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;, &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]]&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;There is one further complication with this. In order to transform to EitherT we need a Monad[Future] otherwise we’ll get a compile error as follows.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-text&quot; data-lang=&quot;text&quot;&gt;Error:(64, 13) could not find implicit value for parameter F: scalaz.Functor[scala.concurrent.Future]&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;You don’t get one for free (no pun intended) in Scalaz so let’s define one as follows&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;&lt;span class=&quot;k&quot;&gt;implicit&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;MWEC&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;implicit&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;ec&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;ExecutionContext&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Monad&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;new&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Monad&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Future&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;]{&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;point&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;a&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;a&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;
+    &lt;span class=&quot;k&quot;&gt;def&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;bind&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;A&lt;/span&gt;, &lt;span class=&quot;kt&quot;&gt;B&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;](&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;fa&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;])(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;f&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;A&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;=&amp;gt;&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;B&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;])&lt;/span&gt;&lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;B&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;fa&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;flatMap&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;f&lt;/span&gt;
+  &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;There’s a little bit of extra work going on here, I allow the Monad[Future] to be constructed from an execution context. The reason for that is you need to know which execution context your future is running in. By making the class this way I’m able to pick up an execution context implicitly defined in the same scope.&lt;/p&gt;
+
+&lt;p&gt;See this &lt;a href=&quot;http://stackoverflow.com/questions/44039425/specifying-an-execution-context-for-monadfuture-when-using-eithert-in-scalaz-7&quot;&gt;stackoverflow question&lt;/a&gt; (I asked it!) for more detail on this.&lt;/p&gt;
+
+&lt;h2 id=&quot;hamsters&quot;&gt;Hamsters&lt;/h2&gt;
+
+&lt;p&gt;If you don’t want to bring in a big library like ScalaZ just for this feature, there is a nice micro library called &lt;a href=&quot;https://github.com/scala-hamsters/hamsters&quot;&gt;Hamsters&lt;/a&gt; which contains some useful utilities, one of them being FutureEither.&lt;/p&gt;
+
+&lt;p&gt;Using FutureEither mirrors our approach above almost exactly. The difference is we don’t need to jump through hoops to make our own Monad[Future] and instead of a ‘run’ function, hamsters has a function ‘future’ which turns the FutureEither back into a Future[Either[]]&lt;/p&gt;
+
+&lt;p&gt;The other difference is that we’re required to use the built in Scala Either instead of ScalaZ’s disjuction.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;  &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;r&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb1&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;FutureEither&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dummyFunction1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;14&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;));&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb2&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;FutureEither&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dummyFunction1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;12&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;));&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb3&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;FutureEither&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dummyFunction2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;rb2&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rb1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;))&lt;/span&gt;
+
+    &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;yield&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rb3&lt;/span&gt;
+
+    &lt;span class=&quot;n&quot;&gt;r&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;.&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;map&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;{&lt;/span&gt;
+      &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Right&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;s&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;c1&quot;&gt;// s == &quot;13 horay!&quot;
+&lt;/span&gt;      &lt;span class=&quot;k&quot;&gt;case&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Left&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;e&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&amp;gt;&lt;/span&gt;
+        &lt;span class=&quot;c1&quot;&gt;// oops
+&lt;/span&gt;    &lt;span class=&quot;o&quot;&gt;}&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;p&gt;Hamsters has the advantage that the source code is a lot easier to read than that of Scalaz. Take a look! &lt;a href=&quot;https://github.com/scala-hamsters/hamsters/blob/master/src/main/scala/io/github/hamsters/MonadTransformers.scala&quot;&gt;MonadTransformers.scala&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;You can also take advantage of an implicit conversion to get rid of the need for calling ‘future’ at the end. Note that I added a type annotation when setting r which will make Scala look for the impclicit conversion.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;  &lt;span class=&quot;k&quot;&gt;import&lt;/span&gt; &lt;span class=&quot;nn&quot;&gt;io.github.hamsters.MonadTransformers.futureEitherToFuture&lt;/span&gt;
+
+  &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;r&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;:&lt;/span&gt; &lt;span class=&quot;kt&quot;&gt;Future&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;Either&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;[&lt;/span&gt;&lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;, &lt;span class=&quot;kt&quot;&gt;String&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;]]&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;for&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb1&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;FutureEither&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dummyFunction1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;14&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;));&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb2&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;FutureEither&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dummyFunction1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;mi&quot;&gt;12&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;));&lt;/span&gt;
+      &lt;span class=&quot;n&quot;&gt;rb3&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;&amp;lt;-&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;FutureEither&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;dummyFunction2&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;&lt;span class=&quot;n&quot;&gt;rb2&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;+&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rb1&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;))&lt;/span&gt;
+
+    &lt;span class=&quot;o&quot;&gt;)&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;yield&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;rb3&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+&lt;h2 id=&quot;libraries-used&quot;&gt;Libraries used&lt;/h2&gt;
+
+&lt;p&gt;Just for reference the libraries used when writing this post are as follow:&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-scala&quot; data-lang=&quot;scala&quot;&gt;  &lt;span class=&quot;k&quot;&gt;val&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;scalaZVersion&lt;/span&gt; &lt;span class=&quot;k&quot;&gt;=&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;7.2.8&quot;&lt;/span&gt;
+  
+  &lt;span class=&quot;n&quot;&gt;libraryDependencies&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;++=&lt;/span&gt; &lt;span class=&quot;nc&quot;&gt;Seq&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;(&lt;/span&gt;
+  &lt;span class=&quot;s&quot;&gt;&quot;org.scalaz&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%%&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;scalaz-core&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;scalaZVersion&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt;
+  &lt;span class=&quot;s&quot;&gt;&quot;org.scalaz&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%%&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;scalaz-effect&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%&lt;/span&gt; &lt;span class=&quot;n&quot;&gt;scalaZVersion&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt;
+  &lt;span class=&quot;s&quot;&gt;&quot;net.debasishg&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%%&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;redisclient&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;3.4&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;,&lt;/span&gt;
+  &lt;span class=&quot;s&quot;&gt;&quot;io.github.scala-hamsters&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%%&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;hamsters&quot;&lt;/span&gt; &lt;span class=&quot;o&quot;&gt;%&lt;/span&gt; &lt;span class=&quot;s&quot;&gt;&quot;1.3.1&quot;&lt;/span&gt;&lt;span class=&quot;o&quot;&gt;)&lt;/span&gt;&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+</description>
+        <pubDate>Fri, 02 Jun 2017 03:00:40 -0700</pubDate>
+        <link>http://localhost:4000/2017/06/02/future-either-and-monad-transformers.html</link>
+        <guid isPermaLink="true">http://localhost:4000/2017/06/02/future-either-and-monad-transformers.html</guid>
+        
+        <category>scala</category>
+        
+        <category>monads</category>
+        
+        <category>eitherT</category>
+        
+        <category>functional programming</category>
+        
+        <category>hamsters</category>
+        
+        <category>scalaz</category>
+        
+        <category>monad transformers</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Using Python in org-mode</title>
+        <description>&lt;p&gt;This is my first post since I moved my technical blog from &lt;a href=&quot;http://justinsboringpage.blogspot.ca&quot;&gt;justinsboringpage.blogspot.ca&lt;/a&gt; to right here on &lt;a href=&quot;https://pages.github.com&quot;&gt;Github pages&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;All the old posts have been migrated over automatically. Github pages supports a sophisticated static site generator called Jekkyl. Sophistication is a double edged sword. On the one hand it offers a lot of power and flexibility, and on the other a simple mistake will make the site fail to build with an obscure Ruby error message. Hopefully it is worth the trade off.&lt;/p&gt;
+
+&lt;h2 id=&quot;org-mode-babel-and-literate-programming&quot;&gt;Org-mode, babel and literate programming&lt;/h2&gt;
+
+&lt;p&gt;Org mode supports literate programming, which can be defined as follows:&lt;/p&gt;
+
+&lt;p&gt;“Literate programming is an approach to programming introduced by Donald Knuth in which a program is given as an explanation of the program logic in a natural language, such as English, interspersed with snippets of macros and traditional source code, from which a compilable source code can be generated.”&lt;/p&gt;
+
+&lt;p&gt;See here for more:&lt;/p&gt;
+
+&lt;p&gt;&lt;a href=&quot;http://orgmode.org/worg/org-contrib/babel/&quot;&gt;Babel: active code in Org-mode&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;In practise what this allows is to put fragments of source code into an org mode file, which can even be in different languages, hence the name Babel. Each source code block can be evaluated with parameters passed from other blocks. Data can be read from, and written to, org mode tables.&lt;/p&gt;
+
+&lt;p&gt;This is clearly a very powerful feature. For now here’s a very simple example. I run some Python code to get the Python version and then insert it into an org table.&lt;/p&gt;
+
+&lt;p&gt;Add this code to a file. To update the table put the cursor on it and type C-u C-c C-c
+On code blocks you can run using C-c C-c&lt;/p&gt;
+
+&lt;p&gt;To run any Babel code you must enable the language. M-x customize-variable org-babel-load-languages and add python as well as any other supported languages you want to use.&lt;/p&gt;
+
+&lt;figure class=&quot;highlight&quot;&gt;&lt;pre&gt;&lt;code class=&quot;language-plaintext&quot; data-lang=&quot;plaintext&quot;&gt;-*- mode: org; org-confirm-babel-evaluate: nil; -*-
+    
+#+name: python_version
+#+begin_src python :results value
+import sys
+info = sys.version_info
+return(str(info.major) + &quot;.&quot; + str(info.minor) + &quot;.&quot; + str(info.micro))
+#+end_src
+    
+    
+| Language | Version |
+|----------+---------|
+| Python   |  2.7.10 |
+  
+#+TBLFM: $2='(sbe python_version)&lt;/code&gt;&lt;/pre&gt;&lt;/figure&gt;
+
+</description>
+        <pubDate>Wed, 17 Feb 2016 08:31:40 -0800</pubDate>
+        <link>http://localhost:4000/2016/02/16/python-babel.html</link>
+        <guid isPermaLink="true">http://localhost:4000/2016/02/16/python-babel.html</guid>
+        
+        <category>blogs</category>
+        
+        <category>emacs</category>
+        
+        <category>babel</category>
+        
+        <category>python</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Including equations in a blogger post</title>
+        <description>This is a test of following the guide here&amp;nbsp;&lt;a href=&quot;http://www.codecogs.com/latex/integration/htmlequations.php&quot;&gt;http://www.codecogs.com/latex/integration/htmlequations.php&lt;/a&gt;&lt;br /&gt; A sample equation using latex: &lt;br&gt;&lt;br&gt;&lt;div lang=&quot;latex&quot;&gt;\frac{1+sin(x)}{y} &lt;/div&gt; &lt;script type=&quot;text/javascript&quot; src=&quot;http://latex.codecogs.com/latexit.js&quot;&gt;&lt;/script&gt;</description>
+        <pubDate>Wed, 22 Apr 2015 10:18:00 -0700</pubDate>
+        <link>http://localhost:4000/2015/04/22/including-equations-in-blogger-post.html</link>
+        <guid isPermaLink="true">http://localhost:4000/2015/04/22/including-equations-in-blogger-post.html</guid>
+        
+        <category>latex</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Installing RPostgreSQL for R on Max OS Yosemite</title>
+        <description>I went through a painful period of digesting wrong answers to this question on Google. In fact most of the answers are just of the type &quot;this is somebody else's problem so we can't help&quot;&lt;br /&gt;&lt;br /&gt;Anyway this is the eventual sequence of steps I found to install this that works:&lt;br /&gt;&lt;br /&gt;&lt;pre&gt;brew install postgresql&lt;br /&gt;svn checkout http://rpostgresql.googlecode.com/svn/trunk/ rpostgresql-read-only&lt;br /&gt;cd rpostgresql-read-only&lt;br /&gt;R CMD INSTALL --preclean RPostgreSQL&lt;br /&gt;&lt;/pre&gt;&lt;br /&gt;then in R just type&amp;nbsp;library('RPostgreSQL') and you're good to go&lt;br /&gt;&lt;br /&gt;&lt;br /&gt;&lt;br /&gt;&lt;br /&gt;&lt;br /&gt;</description>
+        <pubDate>Fri, 17 Apr 2015 10:12:00 -0700</pubDate>
+        <link>http://localhost:4000/2015/04/17/installing-rpostgresql-for-r-on-max-os.html</link>
+        <guid isPermaLink="true">http://localhost:4000/2015/04/17/installing-rpostgresql-for-r-on-max-os.html</guid>
+        
+        <category>macosx</category>
+        
+        <category>yosemite</category>
+        
+        <category>rpostgresql</category>
+        
+        <category>r</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Easy find</title>
+        <description>&lt;div class=&quot;separator&quot; style=&quot;clear: both; text-align: center;&quot;&gt;&lt;a href=&quot;http://3.bp.blogspot.com/-H9jPbJaEsBY/U7BDjzQ-8-I/AAAAAAAAIcc/Y9Q9v41pGps/s1600/Screen+Shot+2014-06-29+at+9.48.52+AM.png&quot; imageanchor=&quot;1&quot; style=&quot;margin-left: 1em; margin-right: 1em;&quot;&gt;&lt;img alt=&quot;&quot; border=&quot;0&quot; src=&quot;http://3.bp.blogspot.com/-H9jPbJaEsBY/U7BDjzQ-8-I/AAAAAAAAIcc/Y9Q9v41pGps/s1600/Screen+Shot+2014-06-29+at+9.48.52+AM.png&quot; height=&quot;200&quot; title=&quot;&quot; width=&quot;180&quot; /&gt;&lt;/a&gt;&lt;/div&gt;&lt;span style=&quot;font-family: Arial, Helvetica, sans-serif;&quot;&gt;&lt;br /&gt;&lt;/span&gt;&lt;span style=&quot;font-family: Arial, Helvetica, sans-serif;&quot;&gt;I found myself typing&amp;nbsp;&lt;span style=&quot;background-color: #2c67c8; color: white; font-size: 14px;&quot;&gt;find . -name &quot;*.java&quot; | xargs -iHn &quot;something&quot;&lt;/span&gt;&lt;span style=&quot;background-color: #2c67c8; color: white; font-size: 14px;&quot;&gt;&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: white; color: white; font-size: 14px;&quot;&gt;&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: white;&quot;&gt;&lt;span style=&quot;font-size: 14px;&quot;&gt;so often I decided to make it into a bash script and put it in a new ~/Dropbox/bin folder so that I never&amp;nbsp;have to do it again. Worse I never use the print0 option which let's you search files that have spaces in the filename, as it's too hard to remember. So, here's the script.&lt;/span&gt;&lt;/span&gt;&lt;/span&gt;&lt;br /&gt;&lt;br /&gt;&lt;div&gt;&lt;script src=&quot;https://gist.github.com/justinhj/f4cca62abf809eb49622.js&quot;&gt;&lt;/script&gt;&lt;/div&gt;&lt;div&gt;&lt;br /&gt;&lt;/div&gt;&lt;div&gt;&lt;br /&gt;&lt;/div&gt;</description>
+        <pubDate>Sun, 29 Jun 2014 09:47:00 -0700</pubDate>
+        <link>http://localhost:4000/2014/06/29/easy-find.html</link>
+        <guid isPermaLink="true">http://localhost:4000/2014/06/29/easy-find.html</guid>
+        
+        <category>scripting</category>
+        
+        <category>grep</category>
+        
+        <category>programming</category>
+        
+        <category>tools</category>
+        
+        <category>bash</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Sending notifications from Emacs (Mac OS X)</title>
+        <description>&lt;div class=&quot;separator&quot; style=&quot;clear: both; text-align: center;&quot;&gt;&lt;a href=&quot;http://2.bp.blogspot.com/-yDgeaniNYCE/U4NvhCtk5aI/AAAAAAAAIaQ/Z4cS2A8GCto/s1600/notify.png&quot; imageanchor=&quot;1&quot; style=&quot;margin-left: 1em; margin-right: 1em;&quot;&gt;&lt;img border=&quot;0&quot; src=&quot;http://2.bp.blogspot.com/-yDgeaniNYCE/U4NvhCtk5aI/AAAAAAAAIaQ/Z4cS2A8GCto/s1600/notify.png&quot; /&gt;&lt;/a&gt;&lt;/div&gt;&lt;br /&gt;Sending notifications from emacs is something I find useful. In an earlier blog post I talked about how to use Growl to do so.&amp;nbsp;&lt;a href=&quot;/2009/09/10/making-emacs-growl.html&quot;&gt;http://justinsboringpage.blogspot.com/2009/09/making-emacs-growl.html&lt;/a&gt;&lt;br /&gt;&lt;br /&gt;Well now you don't need Growl any longer. There's a neat github project called terminal notifier&amp;nbsp;&lt;a href=&quot;https://github.com/alloy/terminal-notifier&quot;&gt;https://github.com/alloy/terminal-notifier&lt;/a&gt;&amp;nbsp;which let's you send notifications from the terminal.&lt;br /&gt;&lt;br /&gt;You can install it simply, via Homebrew or Rubygems as follows:&lt;br /&gt;&lt;pre style=&quot;background-color: #f8f8f8; border-bottom-left-radius: 3px; border-bottom-right-radius: 3px; border-top-left-radius: 3px; border-top-right-radius: 3px; border: 1px solid rgb(221, 221, 221); box-sizing: border-box; color: #333333; font-family: Consolas, 'Liberation Mono', Courier, monospace; font-size: 13px; line-height: 19px; margin-bottom: 15px; margin-top: 15px; overflow: auto; padding: 6px 10px; word-wrap: normal;&quot;&gt;&lt;code style=&quot;background-color: transparent; border-bottom-left-radius: 3px; border-bottom-right-radius: 3px; border-top-left-radius: 3px; border-top-right-radius: 3px; border: none; box-sizing: border-box; display: inline; font-family: Consolas, 'Liberation Mono', Courier, monospace; font-size: 12px; line-height: inherit; margin: 0px; padding: 0px; word-wrap: normal;&quot;&gt;$ [sudo] gem install terminal-notifier&lt;/code&gt;&lt;/pre&gt;OR&lt;br /&gt;&lt;pre style=&quot;background-color: #f8f8f8; border-bottom-left-radius: 3px; border-bottom-right-radius: 3px; border-top-left-radius: 3px; border-top-right-radius: 3px; border: 1px solid rgb(221, 221, 221); box-sizing: border-box; color: #333333; font-family: Consolas, 'Liberation Mono', Courier, monospace; font-size: 13px; line-height: 19px; margin-bottom: 15px; margin-top: 15px; overflow: auto; padding: 6px 10px; word-wrap: normal;&quot;&gt;&lt;code style=&quot;background-color: transparent; border-bottom-left-radius: 3px; border-bottom-right-radius: 3px; border-top-left-radius: 3px; border-top-right-radius: 3px; border: none; box-sizing: border-box; display: inline; font-family: Consolas, 'Liberation Mono', Courier, monospace; font-size: 12px; line-height: inherit; margin: 0px; padding: 0px; word-wrap: normal;&quot;&gt;brew install terminal-notifier&lt;/code&gt;&lt;/pre&gt;Then you can send notifications using a command like this:&lt;br /&gt;&lt;br /&gt;&lt;div style=&quot;background-color: #2c67c8; color: white; font-family: Menlo; font-size: 11px;&quot;&gt;terminal-notifier -message &quot;hello&quot;&lt;/div&gt;&lt;br /&gt;Finally in order to send the notification from emacs we need to write a little Emacs lisp.&lt;br /&gt;&lt;br /&gt;Check out this gist for the code I use:&lt;br /&gt;&lt;br /&gt;&lt;a href=&quot;https://gist.github.com/justinhj/eb2d354d06631076566f#file-gistfile1-el&quot;&gt;https://gist.github.com/justinhj/eb2d354d06631076566f#file-gistfile1-el&lt;/a&gt;&lt;br /&gt;&lt;br /&gt;This lets you send a notification in the future using M-x timed-notification&lt;br /&gt;&lt;br /&gt;You are prompted for a time, and the format of that time can be given in a human readable way such as &quot;2 seconds&quot; or &quot;5 minutes&quot; (If you're curious for the allowed options look at the info page in emacs for the function timer-duration )&lt;br /&gt;&lt;br /&gt;Then you are prompted for the message &quot;Go to the store&quot;, and the message will be sent.&lt;br /&gt;&lt;br /&gt;The code is very simple, it simply uses run-at-time to run the terminal command in the future. A useful command is find-executable, which given a name will find that executable in your path and run it. This makes configuring tools like this less effort.&lt;br /&gt;&lt;br /&gt;&lt;h3&gt;Troubleshooting&lt;/h3&gt;Hey if it doesn't work first time what can you do?&lt;br /&gt;&lt;br /&gt;&lt;br /&gt;&lt;ol&gt;&lt;li&gt;Check if terminal notify is installed correctly by running at terminal&lt;/li&gt;&lt;li&gt;If that succeeds and you don't get a message check if you have enabled do not disturb mode&lt;/li&gt;&lt;li&gt;Otherwise if that succeeds and yet emacs isn't sending messages you likely don't have the executable on the path. M-x customize-variable exec-path&lt;/li&gt;&lt;/ol&gt;&lt;div&gt;&lt;br /&gt;&lt;/div&gt;&lt;div&gt;&lt;br /&gt;&lt;/div&gt;&lt;br /&gt;&lt;br /&gt;&lt;br /&gt;&lt;br /&gt;&lt;br /&gt;&lt;br /&gt;</description>
+        <pubDate>Mon, 26 May 2014 10:09:00 -0700</pubDate>
+        <link>http://localhost:4000/2014/05/26/sending-notifications-from-emacs.html</link>
+        <guid isPermaLink="true">http://localhost:4000/2014/05/26/sending-notifications-from-emacs.html</guid>
+        
+        <category>emacs</category>
+        
+        <category>notifications</category>
+        
+        <category>terminal</category>
+        
+        <category>mac</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Watch</title>
+        <description>So this is pretty cool.&lt;br /&gt;&lt;br /&gt;&lt;div class=&quot;separator&quot; style=&quot;clear: both; text-align: center;&quot;&gt;&lt;a href=&quot;http://2.bp.blogspot.com/-bbGiSRw-5TA/Uzrm2HdtDVI/AAAAAAAAIRA/TmnCE6bvOPQ/s1600/Screen+Shot+2014-04-01+at+9.18.14+AM.png&quot; imageanchor=&quot;1&quot; style=&quot;margin-left: 1em; margin-right: 1em;&quot;&gt;&lt;img border=&quot;0&quot; src=&quot;http://2.bp.blogspot.com/-bbGiSRw-5TA/Uzrm2HdtDVI/AAAAAAAAIRA/TmnCE6bvOPQ/s1600/Screen+Shot+2014-04-01+at+9.18.14+AM.png&quot; height=&quot;113&quot; width=&quot;640&quot; /&gt;&lt;/a&gt;&lt;/div&gt;&lt;br /&gt;The watch command (available linux and on Mac via brew) will run a program every n seconds and display the results in a terminal.&lt;br /&gt;&lt;br /&gt;For example, the following common will show the display above with human readable disk free space on your system. But since the command can be anything you want this is a pretty powerful tool.&lt;br /&gt;&lt;br /&gt;&lt;div style=&quot;background-color: #fef49c; font-family: Menlo; font-size: 11px;&quot;&gt;watch -n 3 df -h&lt;/div&gt;&lt;div&gt;&lt;br /&gt;&lt;/div&gt;</description>
+        <pubDate>Tue, 01 Apr 2014 09:22:00 -0700</pubDate>
+        <link>http://localhost:4000/2014/04/01/watch.html</link>
+        <guid isPermaLink="true">http://localhost:4000/2014/04/01/watch.html</guid>
+        
+        <category>terminal</category>
+        
+        <category>bash</category>
+        
+        <category>watch</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Checkout out your DB tables</title>
+        <description>I was doing some DB work today and wanted to be able to sort all DB tables based on the date they were created. Turns out you can do some neat stuff by looking in the information_schema.tables. For example this shows all the InnoDB tables.&lt;br /&gt;&lt;br /&gt;&lt;br /&gt;&lt;pre style=&quot;background-color: #eeeeee; border: 1px dashed #999999; color: black; font-family: Andale Mono, Lucida Console, Monaco, fixed, monospace; font-size: 12px; line-height: 14px; overflow: auto; padding: 5px; width: 100%;&quot;&gt;&lt;code&gt;select `table_schema`, `table_name`, `create_time`  FROM information_schema.tables where engine = 'InnoDB' order by create_time desc  ;&lt;br /&gt;&lt;/code&gt;&lt;/pre&gt;</description>
+        <pubDate>Wed, 12 Mar 2014 14:03:00 -0700</pubDate>
+        <link>http://localhost:4000/2014/03/12/checkout-out-your-db-tables.html</link>
+        <guid isPermaLink="true">http://localhost:4000/2014/03/12/checkout-out-your-db-tables.html</guid>
+        
+        <category>mysql</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>Configuring emacs to send iCloud mail on Mac OS X</title>
+        <description>&lt;table cellpadding=&quot;0&quot; cellspacing=&quot;0&quot; class=&quot;tr-caption-container&quot; style=&quot;margin-left: auto; margin-right: auto; text-align: center;&quot;&gt;&lt;tbody&gt;&lt;tr&gt;&lt;td style=&quot;text-align: center;&quot;&gt;&lt;a href=&quot;http://farm6.staticflickr.com/5230/5807619643_392d857dfe_m.jpg&quot; imageanchor=&quot;1&quot; style=&quot;clear: left; margin-bottom: 1em; margin-left: auto; margin-right: auto;&quot;&gt;&lt;img border=&quot;0&quot; src=&quot;http://farm6.staticflickr.com/5230/5807619643_392d857dfe_m.jpg&quot; /&gt;&lt;/a&gt;&lt;/td&gt;&lt;/tr&gt;&lt;tr&gt;&lt;td class=&quot;tr-caption&quot; style=&quot;text-align: center;&quot;&gt;Pic from&amp;nbsp;ajc1 on Flikr&lt;/td&gt;&lt;/tr&gt;&lt;/tbody&gt;&lt;/table&gt;It's handy to be able to send emails from emacs, and this guide will show how to set up SMTP via an iCloud email account.&lt;br /&gt;&lt;div&gt;&lt;br /&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;Step 1. Install gnutls&lt;/b&gt;&lt;/div&gt;&lt;div&gt;&lt;b&gt;&lt;br /&gt;&lt;/b&gt;&lt;/div&gt;&lt;div&gt;iCloud requires you to send emails over secure channel, and emacs supports sending email with starttls or gnutls. gnutls is available through &lt;a href=&quot;http://mxcl.github.com/homebrew/&quot;&gt;brew&lt;/a&gt;&lt;/div&gt;&lt;div&gt;&lt;br /&gt;&lt;/div&gt;&lt;div&gt;To install it is easy:&lt;/div&gt;&lt;div&gt;&lt;br /&gt;&lt;/div&gt;&lt;blockquote class=&quot;tr_bq&quot;&gt;brew install gnutls&lt;/blockquote&gt;&lt;br /&gt;Wait a few minutes while your Mac gets hot downloading and compiling!&lt;br /&gt;&lt;br /&gt;&lt;b&gt;Step 2. Create an authinfo file&lt;/b&gt;&lt;br /&gt;&lt;br /&gt;emacs can look in a file ~/.authinfo to find your login credentials, so create that file and fill in the blanks.&lt;br /&gt;&lt;br /&gt;&lt;blockquote class=&quot;tr_bq&quot;&gt;touch ~/.authinfo&lt;/blockquote&gt;&lt;blockquote class=&quot;tr_bq&quot;&gt;chmod 600 ~/.authinfo&lt;/blockquote&gt;&lt;br /&gt;The contents of the file should read:&lt;br /&gt;&lt;br /&gt;&lt;blockquote class=&quot;tr_bq&quot;&gt;machine smtp.mail.me.com port 587 login YOURNAME@icloud.com password YOURPASSWORD&lt;/blockquote&gt;&lt;b&gt;Step 3. Configure emacs&lt;/b&gt;&lt;br /&gt;&lt;b&gt;&lt;br /&gt;&lt;/b&gt;Add the following to your .emacs file:&lt;br /&gt;&lt;br /&gt;&lt;br /&gt;(setq&lt;br /&gt;&amp;nbsp;send-mail-function 'smtpmail-send-it&lt;br /&gt;&amp;nbsp;message-send-mail-function 'smtpmail-send-it&lt;br /&gt;&amp;nbsp;user-mail-address &quot;YOURNAME@icloud.com&quot;&lt;br /&gt;&amp;nbsp;user-full-name &quot;YOUR FULLNAME&quot;&lt;br /&gt;&amp;nbsp;smtpmail-starttls-credentials '((&quot;smtp.mail.me.com&quot; 587 nil nil))&lt;br /&gt;&amp;nbsp;smtpmail-auth-credentials &amp;nbsp;(expand-file-name &quot;~/.authinfo&quot;)&lt;br /&gt;&amp;nbsp;smtpmail-default-smtp-server &quot;smtp.mail.me.com&quot;&lt;br /&gt;&amp;nbsp;smtpmail-smtp-server &quot;smtp.mail.me.com&quot;&lt;br /&gt;&amp;nbsp;smtpmail-smtp-service 587&lt;br /&gt;&amp;nbsp;smtpmail-debug-info t&lt;br /&gt;&amp;nbsp;starttls-extra-arguments nil&lt;br /&gt;&amp;nbsp;starttls-gnutls-program&amp;nbsp;(executable-find &quot;gnutls-cli&quot;)&lt;br /&gt;&amp;nbsp;smtpmail-warn-about-unknown-extensions t&lt;br /&gt;&amp;nbsp;starttls-use-gnutls t)&lt;br /&gt;&lt;br /&gt;Note that your gnutls program may be in a different spot. Find it with:&lt;br /&gt;&lt;br /&gt;&lt;blockquote class=&quot;tr_bq&quot;&gt;mdfind -name gnutls-cli&amp;nbsp;&lt;/blockquote&gt;&lt;b&gt;Step 4. Testing&lt;/b&gt;&lt;br /&gt;&lt;b&gt;&lt;br /&gt;&lt;/b&gt;To compose an email C-x m&lt;br /&gt;&lt;br /&gt;Enter an email and hit C-c c to send it.&lt;br /&gt;&lt;br /&gt;If it works, great! If not switch to the *Messages* buffer for hints on what may have gone wrong.&lt;br /&gt;&lt;br /&gt;&lt;b&gt;Step 5. Sending emails from elisp code&lt;/b&gt;&lt;br /&gt;&lt;b&gt;&lt;br /&gt;&lt;/b&gt;&lt;br /&gt;&lt;br /&gt;&lt;span class=&quot;Apple-tab-span&quot; style=&quot;white-space: pre;&quot;&gt; &lt;/span&gt;(message-mail recipient subject)&lt;br /&gt;&lt;span class=&quot;Apple-tab-span&quot; style=&quot;white-space: pre;&quot;&gt; &lt;/span&gt;(message-send-and-exit)))))&lt;br /&gt;&lt;div&gt;&lt;br /&gt;&lt;/div&gt;&lt;br /&gt;&lt;blockquote class=&quot;tr_bq&quot;&gt;&lt;/blockquote&gt;&lt;blockquote class=&quot;tr_bq&quot;&gt;&lt;/blockquote&gt;</description>
+        <pubDate>Wed, 06 Feb 2013 02:33:00 -0800</pubDate>
+        <link>http://localhost:4000/2013/02/06/configuring-emacs-to-send-icloud-mail.html</link>
+        <guid isPermaLink="true">http://localhost:4000/2013/02/06/configuring-emacs-to-send-icloud-mail.html</guid>
+        
+        <category>email</category>
+        
+        <category>icloud</category>
+        
+        <category>emacs</category>
+        
+        <category>emacs-lisp</category>
+        
+        <category>elisp</category>
+        
+        <category>smtp</category>
+        
+        
+      </item>
+    
+      <item>
+        <title>find grep on Mac OS X</title>
+        <description>On linux machines I search files using find, egrep and xargs as follows:&lt;br /&gt;&lt;br /&gt;&amp;nbsp; find . -name &quot;*.cpp&quot; | xargs -i egrep -iHn &quot;some search string&quot; {}&lt;br /&gt;&lt;br /&gt;this outputs any matches with the filename and number and also disables case dependency.&lt;br /&gt;&lt;br /&gt;On my Mac it doesn't work. I tried reverting to egrep -r (to search recursively) instead, but that doesn't work. It just fails silently too. I tried installing findutils with brew to see if that helped, as often gnu tools are more up to date in brew than in the Apple version, but that didn't help.&lt;br /&gt;&lt;br /&gt;So after some fiddling I found that the syntax below works:&lt;br /&gt;&lt;br /&gt;&lt;br /&gt;&amp;nbsp; find . -name &quot;*.cpp&quot; | xargs egrep -iHn &quot;some search string&quot;&lt;br /&gt;&lt;br /&gt;Only subtly different!&lt;br /&gt;&lt;br /&gt;Actually, hold up, this does not work for filenames that have spaces in them. :(&lt;br /&gt;&lt;br /&gt;Try this instead:&lt;br /&gt;&lt;br /&gt;find . -type f -print0 | xargs -0 egrep -iHn &quot;some search string&quot;&lt;br /&gt;&lt;br /&gt;J.&lt;br /&gt;&lt;div&gt;&lt;br /&gt;&lt;/div&gt;</description>
+        <pubDate>Sun, 29 Apr 2012 12:24:00 -0700</pubDate>
+        <link>http://localhost:4000/2012/04/29/find-grep-on-mac-os-x.html</link>
+        <guid isPermaLink="true">http://localhost:4000/2012/04/29/find-grep-on-mac-os-x.html</guid>
+        
+        <category>mac osx</category>
+        
+        <category>grep</category>
+        
+        <category>bash</category>
+        
+        <category>find</category>
+        
+        
+      </item>
+    
+  </channel>
+</rss>
